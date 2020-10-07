@@ -5,6 +5,7 @@ use sqlx::sqlite::SqlitePool;
 
 mod models;
 
+use models::PasswordResetToken;
 use models::User;
 
 #[async_std::main]
@@ -13,12 +14,19 @@ async fn main() -> Result<(), sqlx::Error> {
     // TODO: Remove this workaround in sqlx > 3
     let pool = SqlitePool::new("sqlite:%3Amemory:").await?;
 
+    // TODO: uniqueness on password_reset_tokens.user_id
     let schema = "
-        DROP TABLE IF EXISTS users;
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             email TEXT NOT NULL UNIQUE,
             password TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS password_reset_tokens (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            user_id INTEGER NOT NULL,
+            token TEXT NOT NULL,
+            FOREIGN KEY(user_id) REFERENCES users(id)
         );
     ";
     sqlx::query(schema).execute(&pool).await?;
@@ -35,7 +43,11 @@ async fn main() -> Result<(), sqlx::Error> {
 
     let cookie = login(&pool, &store, "bob@example.com".to_string(), "12345678".to_string()).await;
 
-    auth(&pool, &store, cookie).await;
+    let user = auth(&pool, &store, cookie).await;
+
+    let token = forgot_password(&pool, user.email).await;
+
+    reset_password(&pool, token, "87654321".to_string(), "87654321".to_string()).await;
     Ok(())
 }
 
@@ -51,7 +63,7 @@ async fn register(pool: &SqlitePool, store: &SqliteSessionStore, email: String, 
     return cookie_value
 }
 
-async fn login(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String) -> String{
+async fn login(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String) -> String {
     let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
 
     let matches = argon2::verify_encoded(&user.password, password.as_bytes()).unwrap();
@@ -79,5 +91,21 @@ async fn auth(pool: &SqlitePool, store: &SqliteSessionStore, cookie_value: Strin
     return user
 }
 
-// Forgot Password
-// Reset Password
+async fn forgot_password(pool: &SqlitePool, email: String) -> String {
+    let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
+    PasswordResetToken::new(user.id).unwrap().execute(pool).await.unwrap();
+    let reset_token = PasswordResetToken::find_by_user_id(user.id).fetch_one(pool).await.unwrap();
+    println!("Created token {:?}", reset_token.token);
+    return reset_token.token
+}
+
+async fn reset_password(pool: &SqlitePool, token: String, password: String, password_confirmation: String) {
+    // TODO: transaction
+    // TODO: delete
+    let reset_token = PasswordResetToken::find_by_token(token).fetch_one(pool).await.unwrap();
+    let user = User::find_by_id(reset_token.user_id).fetch_one(pool).await.unwrap();
+    user.reset_password(password, password_confirmation).unwrap().execute(pool).await.unwrap();
+    // TODO: refresh_from_db
+    let user = User::find_by_id(reset_token.user_id).fetch_one(pool).await.unwrap();
+    println!("Reset password {:?}", user.password);
+}
