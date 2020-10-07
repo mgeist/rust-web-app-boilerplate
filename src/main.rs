@@ -1,4 +1,5 @@
-use async_session::{SessionStore};
+use async_session::SessionStore;
+use async_sqlx_session::SqliteSessionStore;
 use sqlx::prelude::*;
 use sqlx::sqlite::SqlitePool;
 
@@ -21,42 +22,62 @@ async fn main() -> Result<(), sqlx::Error> {
         );
     ";
     sqlx::query(schema).execute(&pool).await?;
-    match User::new("bob@example.com".to_string(), "12345678".to_string(), "12345678".to_string()) {
-        Ok(query) => query.execute(&pool).await?,
-        Err(e) => panic!("{:?}", e)
-    };
-
-    let user = User::find_by_email("bob@example.com".to_string()).fetch_one(&pool).await?;
-
-    let matches = argon2::verify_encoded(&user.password, "12345678".as_bytes()).unwrap();
-    println!("Hello, world! {:?} {:?}", matches, user);
 
     // Session Stuff
-    let store = async_sqlx_session::SqliteSessionStore::from_client(pool);
+    let store = SqliteSessionStore::from_client(pool.clone());
     store.migrate().await.unwrap();
+
+    let cookie = register(
+        &pool, &store, "bob@example.com".to_string(), "12345678".to_string(), "12345678".to_string()
+    ).await;
+
+    logout(&store, cookie).await;
+
+    let cookie = login(&pool, &store, "bob@example.com".to_string(), "12345678".to_string()).await;
+
+    auth(&pool, &store, cookie).await;
+    Ok(())
+}
+
+async fn register(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String, password_confirmation: String) -> String {
+    User::new(email.clone(), password, password_confirmation).unwrap().execute(pool).await.unwrap();
+    let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
 
     let mut session = async_session::Session::new();
     session.insert("user_id", user.id).unwrap();
 
-    let cookie_value = store.store_session(session).await.unwrap().unwrap();
-
-    let session = store.load_session(cookie_value.clone()).await.unwrap().unwrap();
-    println!("{:?} {:?}", cookie_value, session.get::<usize>("user_id").unwrap());
-
-    Ok(())
+    let cookie_value = (*store).store_session(session).await.unwrap().unwrap();
+    println!("Registered, user {:?}, cookie {:?}", user, cookie_value);
+    return cookie_value
 }
 
-// Login:
-// - find_by_email
-// - verify_encoded
-// - Session::new
+async fn login(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String) -> String{
+    let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
 
-// Logout:
-// - store.destroy_session
+    let matches = argon2::verify_encoded(&user.password, password.as_bytes()).unwrap();
+    if !matches { return "".to_string() }
 
-// Register:
-// - User::new
-// - Session::new
+    let mut session = async_session::Session::new();
+    session.insert("user_id", user.id).unwrap();
 
-// Auth:
-// - store.load_session
+    let cookie_value = (*store).store_session(session).await.unwrap().unwrap();
+    println!("Logged in, cookie {:?}", cookie_value);
+    return cookie_value
+}
+
+async fn logout(store: &SqliteSessionStore, cookie_value: String) {
+    let session = (*store).load_session(cookie_value).await.unwrap().unwrap();
+    store.destroy_session(session).await.unwrap();
+    println!("Logged out");
+}
+
+async fn auth(pool: &SqlitePool, store: &SqliteSessionStore, cookie_value: String) -> User {
+    let session = (*store).load_session(cookie_value).await.unwrap().unwrap();
+    let user_id = session.get("user_id").unwrap();
+    let user = User::find_by_id(user_id).fetch_one(pool).await.unwrap();
+    println!("Authed {:?}", user);
+    return user
+}
+
+// Forgot Password
+// Reset Password
