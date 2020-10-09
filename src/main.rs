@@ -3,40 +3,15 @@ use async_sqlx_session::SqliteSessionStore;
 use sqlx::prelude::*;
 use sqlx::sqlite::SqlitePool;
 
-mod models;
-
-use models::PasswordResetToken;
-use models::User;
+use lib::{init_db, init_store};
+use lib::models::{PasswordResetToken, User};
 
 #[async_std::main]
 async fn main() -> Result<(), sqlx::Error> {
     // DB Stuff
-    // TODO: Remove this workaround in sqlx > 3
-    let pool = SqlitePool::new("sqlite:%3Amemory:").await?;
-
-    // TODO: uniqueness on password_reset_tokens.user_id
-    let schema = "
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            created INTEGER NOT NULL,
-            updated INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            user_id INTEGER NOT NULL UNIQUE,
-            token TEXT NOT NULL,
-            expiration INTEGER NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-    ";
-    sqlx::query(schema).execute(&pool).await?;
-
+    let pool = init_db().await.unwrap();
     // Session Stuff
-    let store = SqliteSessionStore::from_client(pool.clone());
-    store.migrate().await.unwrap();
+    let store = init_store(pool.clone()).await.unwrap();
 
     let cookie = register(
         &pool, &store, "bob@example.com".to_string(), "12345678".to_string(), "12345678".to_string()
@@ -115,4 +90,17 @@ async fn reset_password(pool: &SqlitePool, token: String, password: String, pass
 
     tx.commit().await.unwrap();
     println!("Reset password {:?}", user.password);
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn foo() {
+        assert_eq!(2 + 2, 4);
+    }
+
+    // #[test]
+    // fn bar() {
+    //     panic!("This test fails");
+    // }
 }
