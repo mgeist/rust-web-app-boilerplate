@@ -19,13 +19,16 @@ async fn main() -> Result<(), sqlx::Error> {
         CREATE TABLE IF NOT EXISTS users (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
             email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL
+            password TEXT NOT NULL,
+            created INTEGER NOT NULL,
+            updated INTEGER NOT NULL
         );
 
         CREATE TABLE IF NOT EXISTS password_reset_tokens (
             id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            user_id INTEGER NOT NULL,
+            user_id INTEGER NOT NULL UNIQUE,
             token TEXT NOT NULL,
+            expiration INTEGER NOT NULL,
             FOREIGN KEY(user_id) REFERENCES users(id)
         );
     ";
@@ -100,12 +103,16 @@ async fn forgot_password(pool: &SqlitePool, email: String) -> String {
 }
 
 async fn reset_password(pool: &SqlitePool, token: String, password: String, password_confirmation: String) {
-    // TODO: transaction
-    // TODO: delete
-    let reset_token = PasswordResetToken::find_by_token(token).fetch_one(pool).await.unwrap();
-    let user = User::find_by_id(reset_token.user_id).fetch_one(pool).await.unwrap();
-    user.reset_password(password, password_confirmation).unwrap().execute(pool).await.unwrap();
-    // TODO: refresh_from_db
-    let user = User::find_by_id(reset_token.user_id).fetch_one(pool).await.unwrap();
+    let mut tx = pool.begin().await.unwrap();
+
+    // TODO check if expired token
+
+    let reset_token = PasswordResetToken::find_by_token(token).fetch_one(&mut tx).await.unwrap();
+    let user = User::find_by_id(reset_token.user_id).fetch_one(&mut tx).await.unwrap();
+    user.reset_password(password, password_confirmation).unwrap().execute(&mut tx).await.unwrap();
+    reset_token.delete().unwrap().execute(&mut tx).await.unwrap();
+    let user = User::find_by_id(reset_token.user_id).fetch_one(&mut tx).await.unwrap();
+
+    tx.commit().await.unwrap();
     println!("Reset password {:?}", user.password);
 }

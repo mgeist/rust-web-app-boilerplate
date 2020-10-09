@@ -1,4 +1,4 @@
-use argon2::{Config, hash_encoded};
+use argon2::{Config, hash_encoded, verify_encoded};
 use rand::prelude::*;
 use rand::{thread_rng};
 use sqlx::{FromRow, Sqlite};
@@ -15,13 +15,17 @@ pub struct User {
     pub id: i64,
     pub email: String,
     pub password: String,
-    // TODO: created_date
+    pub created: i32,
+    pub updated: i32,
 }
 
 impl User {
     pub fn new(email: String, password: String, password_confirmation: String) -> Result<Query, Error> {
         let hash = generate_password(password, password_confirmation).unwrap();
-        let query = sqlx::query("INSERT INTO users (email, password) VALUES ($1, $2)")
+        let query = sqlx::query("
+            INSERT INTO users (email, password, created, updated)
+            VALUES ($1, $2, STRFTIME('%s', 'now'), STRFTIME('%s', 'now'))
+        ")
             .bind(email)
             .bind(hash);
         Ok(query)
@@ -42,9 +46,12 @@ impl User {
     }
 
     pub fn reset_password(&self, password: String, password_confirmation: String) -> Result<Query, Error> {
+        let matches = verify_encoded(&self.password, password.as_bytes()).unwrap();
+        if matches { return Err(Error::ValidationError) }
+
         let hash = generate_password(password, password_confirmation).unwrap();
-        // TODO: Check it's not same as current
-        let query = sqlx::query("UPDATE users SET password = $1 WHERE id = $2")
+
+        let query = sqlx::query("UPDATE users SET password = $1, updated = STRFTIME('%s', 'now') WHERE id = $2")
             .bind(hash)
             .bind(self.id);
         Ok(query)
