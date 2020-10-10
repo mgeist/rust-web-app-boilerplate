@@ -1347,6 +1347,7 @@ dependencies = [
  "async-std",
  "rand",
  "rust-argon2",
+ "serde",
  "sqlx",
  "tide",
 ]

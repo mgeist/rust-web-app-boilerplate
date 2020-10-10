@@ -11,3 +11,12 @@ impl<'a> HelloTemplate<'a> {
         Self { name }
     }
 }
+
+#[derive(Template)]
+#[template(path = "register.html")]
+pub struct RegisterTemplate {}
+impl RegisterTemplate {
+    pub fn new() -> Self {
+        return Self {}
+    }
+}

@@ -17,6 +17,7 @@ async-sqlx-session = { version = "0.2", features = ["sqlite"]}
 async-std = { version = "1.6", features = ["attributes"] }
 rand = "0.7"
 rust-argon2 = "0.8"
+serde = "1.0"
 sqlx = { version = "0.3", features = ["sqlite"] }
 tide = "0.13"
 

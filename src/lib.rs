@@ -1,9 +1,19 @@
 use async_sqlx_session::SqliteSessionStore;
 use sqlx::Error as sqlxError;
 use sqlx::sqlite::SqlitePool;
+use tide::sessions::SessionMiddleware;
 
+mod controllers;
 pub mod models;
 pub mod templates;
+
+use controllers::{
+    auth_controller,
+    hello_controller, 
+    login_controller, 
+    logout_controller, 
+    register,
+};
 
 #[derive(Clone)]
 pub struct AppState {
@@ -40,4 +50,23 @@ pub async fn init_store(pool: SqlitePool) -> Result<SqliteSessionStore, sqlxErro
     store.migrate().await?;
 
     Ok(store)
+}
+
+pub async fn init_app(pool: SqlitePool, store: SqliteSessionStore) -> tide::Server<AppState> {
+    tide::log::start();
+
+    let session_secret = std::env::var("SECRET_KEY").unwrap();
+    let session_middleware = SessionMiddleware::new(store, session_secret.as_bytes());
+
+    let mut app = tide::with_state(AppState { db: pool.clone() });
+    app.with(session_middleware);
+
+    app.at("/").get(hello_controller);
+    app.at("/auth").get(auth_controller);
+    app.at("/login").get(login_controller);
+    app.at("/logout").get(logout_controller);
+    app.at("/register")
+        .get(register::get)
+        .post(register::post);
+    app
 }
