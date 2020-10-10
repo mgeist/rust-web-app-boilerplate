@@ -1,44 +1,70 @@
+use std::io::Error as stdError;
+
 use async_session::SessionStore;
 use async_sqlx_session::SqliteSessionStore;
 use sqlx::prelude::*;
 use sqlx::sqlite::SqlitePool;
+use tide::Redirect;
+use tide::sessions::SessionMiddleware;
 
-use lib::{init_db, init_store};
+use lib::{AppState, init_db, init_store};
 use lib::models::{PasswordResetToken, User};
+use lib::templates::HelloTemplate;
 
 #[async_std::main]
-async fn main() -> Result<(), sqlx::Error> {
+async fn main() -> Result<(), stdError> {
     // DB Stuff
     let pool = init_db().await.unwrap();
     // Session Stuff
     let store = init_store(pool.clone()).await.unwrap();
 
-    let cookie = register(
-        &pool, &store, "bob@example.com".to_string(), "12345678".to_string(), "12345678".to_string()
-    ).await;
+    // Temp test auth stuff
+    // let cookie = register(
+    //     &pool, &store, "bob@example.com".to_string(), "12345678".to_string(), "12345678".to_string()
+    // ).await;
+    // logout(&store, cookie).await;
+    // let cookie = login(&pool, &store, "bob@example.com".to_string(), "12345678".to_string()).await;
+    // let user = auth(&pool, &store, cookie).await;
+    // let token = forgot_password(&pool, user.email).await;
+    // reset_password(&pool, token, "87654321".to_string(), "87654321".to_string()).await;
 
-    logout(&store, cookie).await;
+    // Web Stuff
+    tide::log::start();
 
-    let cookie = login(&pool, &store, "bob@example.com".to_string(), "12345678".to_string()).await;
+    let session_secret = std::env::var("SECRET_KEY").unwrap();
+    let session_middleware = SessionMiddleware::new(store, session_secret.as_bytes());
 
-    let user = auth(&pool, &store, cookie).await;
+    let mut app = tide::with_state(AppState { db: pool.clone() });
+    app.with(session_middleware);
 
-    let token = forgot_password(&pool, user.email).await;
+    app.at("/").get(hello);
+    app.at("/register").get(register);
+    app.listen("127.0.0.1:8080").await?;
 
-    reset_password(&pool, token, "87654321".to_string(), "87654321".to_string()).await;
     Ok(())
 }
 
-async fn register(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String, password_confirmation: String) -> String {
-    User::new(email.clone(), password, password_confirmation).unwrap().execute(pool).await.unwrap();
-    let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
+pub async fn hello(request: tide::Request<AppState>) -> tide::Result {
+    let user_id: i64 = request.session().get("user_id").unwrap_or_default();
+    let mut name = "Bob".to_string();
+    if user_id != 0 {
+        name = user_id.to_string();
+    }
+    Ok(HelloTemplate::new(&name).into())
+}
 
-    let mut session = async_session::Session::new();
+pub async fn register(mut request: tide::Request<AppState>) -> tide::Result {
+    let db = &request.state().db;
+    let email = "bob@example.com".to_string();
+    let password = "123123123".to_string();
+
+    User::new(email.clone(), password.clone(), password).unwrap().execute(db).await.unwrap();
+    let user = User::find_by_email(email).fetch_one(db).await.unwrap();
+
+    let session = request.session_mut();
     session.insert("user_id", user.id).unwrap();
 
-    let cookie_value = (*store).store_session(session).await.unwrap().unwrap();
-    println!("Registered, user {:?}, cookie {:?}", user, cookie_value);
-    return cookie_value
+    Ok(Redirect::new("/").into())
 }
 
 async fn login(pool: &SqlitePool, store: &SqliteSessionStore, email: String, password: String) -> String {

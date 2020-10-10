@@ -3,6 +3,12 @@ use sqlx::Error as sqlxError;
 use sqlx::sqlite::SqlitePool;
 
 pub mod models;
+pub mod templates;
+
+#[derive(Clone)]
+pub struct AppState {
+    pub db: SqlitePool,
+}
 
 pub async fn init_db() -> Result<SqlitePool, sqlxError> {
     let pool = SqlitePool::new("sqlite:%3Amemory:").await?;
