@@ -20,3 +20,26 @@ impl RegisterTemplate {
         return Self {}
     }
 }
+
+pub enum LoginError {
+    InvalidCredentials
+}
+#[derive(Template)]
+#[template(path = "login.html")]
+pub struct LoginTemplate {
+    error: Option<LoginError>,
+}
+
+impl LoginTemplate {
+    pub fn new() -> Self {
+        return Self { 
+            error: None
+        }
+    }
+
+    pub fn with_error(error: LoginError) -> Self {
+        return Self {
+            error: Some(error)
+        }
+    }
+}

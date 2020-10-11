@@ -10,8 +10,8 @@ pub mod templates;
 use controllers::{
     auth_controller,
     hello_controller, 
-    login_controller, 
     logout_controller, 
+    login,
     register,
 };
 
@@ -63,7 +63,9 @@ pub async fn init_app(pool: SqlitePool, store: SqliteSessionStore) -> tide::Serv
 
     app.at("/").get(hello_controller);
     app.at("/auth").get(auth_controller);
-    app.at("/login").get(login_controller);
+    app.at("/login")
+        .get(login::get)
+        .post(login::post);
     app.at("/logout").get(logout_controller);
     app.at("/register")
         .get(register::get)
