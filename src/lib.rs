@@ -4,6 +4,7 @@ use sqlx::sqlite::SqlitePool;
 use tide::sessions::SessionMiddleware;
 
 mod controllers;
+mod error;
 pub mod models;
 pub mod templates;
 

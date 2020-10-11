@@ -1,15 +1,10 @@
 use rand::prelude::*;
 use rand::distributions::Alphanumeric;
-use rand::{thread_rng};
-use sqlx::{FromRow, Sqlite};
+use rand::thread_rng;
+use sqlx::FromRow;
 
-// TODO sort out this stuff
-#[derive(Debug)]
-pub enum Error {
-    ValidationError
-}
-type Query = sqlx::Query<'static, Sqlite>;
-type QueryAs<T> = sqlx::QueryAs<'static, Sqlite, T>;
+use crate::error::Error;
+use super::{Query, QueryAs};
 
 #[derive(Debug, FromRow)]
 pub struct PasswordResetToken {
@@ -47,9 +42,8 @@ impl PasswordResetToken {
             .bind(token)
     }
 
-    pub fn delete(&self) -> Result<Query, Error> {
-        let query = sqlx::query("DELETE FROM password_reset_tokens WHERE id = $1")
-            .bind(self.id);
-        Ok(query)
+    pub fn delete(&self) -> Query {
+        sqlx::query("DELETE FROM password_reset_tokens WHERE id = $1")
+            .bind(self.id)
     }
 }

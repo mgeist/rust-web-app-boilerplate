@@ -1,14 +1,10 @@
 use argon2::{Config, hash_encoded, verify_encoded};
 use rand::prelude::*;
-use rand::{thread_rng};
-use sqlx::{FromRow, Sqlite};
+use rand::thread_rng;
+use sqlx::FromRow;
 
-#[derive(Debug)]
-pub enum Error {
-    ValidationError
-}
-type Query = sqlx::Query<'static, Sqlite>;
-type QueryAs<T> = sqlx::QueryAs<'static, Sqlite, T>;
+use crate::error::Error;
+use super::{Query, QueryAs};
 
 #[derive(Debug, FromRow)]
 pub struct User {
@@ -21,7 +17,7 @@ pub struct User {
 
 impl User {
     pub fn new(email: String, password: String, password_confirmation: String) -> Result<Query, Error> {
-        let hash = generate_password(password, password_confirmation).unwrap();
+        let hash = generate_password(password, password_confirmation)?;
         let query = sqlx::query("
             INSERT INTO users (email, password, created, updated)
             VALUES ($1, $2, STRFTIME('%s', 'now'), STRFTIME('%s', 'now'))
@@ -29,6 +25,18 @@ impl User {
             .bind(email)
             .bind(hash);
         Ok(query)
+    }
+
+    pub fn validate_password(password: String, password_confirmation: String) -> Result<(), Error> {
+        if password.len() < 8 {
+            return Err(Error::PasswordTooShort);
+        } else if password.len() > 64 {
+            return Err(Error::PasswordTooLong);
+        } else if !password.eq(&password_confirmation) {
+            return Err(Error::PasswordMismatch);
+        } else {
+            return Ok(());
+        }
     }
 
     pub fn all() -> QueryAs<Self> {
@@ -46,10 +54,14 @@ impl User {
     }
 
     pub fn reset_password(&self, password: String, password_confirmation: String) -> Result<Query, Error> {
-        let matches = verify_encoded(&self.password, password.as_bytes()).unwrap();
-        if matches { return Err(Error::ValidationError) }
+        let matches;
+        match verify_encoded(&self.password, password.as_bytes()) {
+            Ok(m) => matches = m,
+            Err(_e) => return Err(Error::UnknownError)
+        }
+        if matches { return Err(Error::PasswordMismatch) }
 
-        let hash = generate_password(password, password_confirmation).unwrap();
+        let hash = generate_password(password, password_confirmation)?;
 
         let query = sqlx::query("UPDATE users SET password = $1, updated = STRFTIME('%s', 'now') WHERE id = $2")
             .bind(hash)
@@ -59,22 +71,15 @@ impl User {
 }
 
 fn generate_password(password: String, password_confirmation: String) -> Result<String, Error> {
-    // TODO:
-    // - move validations to a validations module
-    if !password.eq(&password_confirmation) {
-        Err(Error::ValidationError)
-    }
-    else if password.len() < 8 || password.len() > 64 {
-        Err(Error::ValidationError)
-    } else {
-        let mut salt = [0u8; 16];
-        thread_rng().fill_bytes(&mut salt);
+    User::validate_password(password.clone(), password_confirmation)?;
 
-        let hash;
-        match hash_encoded(password.as_bytes(), &salt, &Config::default()) {
-            Ok(h) => hash = h,
-            Err(_e) => return Err(Error::ValidationError)
-        };
-        Ok(hash)
-    }
+    let mut salt = [0u8; 16];
+    thread_rng().fill_bytes(&mut salt);
+
+    let hash;
+    match hash_encoded(password.as_bytes(), &salt, &Config::default()) {
+        Ok(h) => hash = h,
+        Err(_e) => return Err(Error::UnknownError),
+    };
+    Ok(hash)
 }

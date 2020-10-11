@@ -56,7 +56,7 @@ async fn reset_password(pool: &SqlitePool, token: String, password: String, pass
     let reset_token = PasswordResetToken::find_by_token(token).fetch_one(&mut tx).await.unwrap();
     let user = User::find_by_id(reset_token.user_id).fetch_one(&mut tx).await.unwrap();
     user.reset_password(password, password_confirmation).unwrap().execute(&mut tx).await.unwrap();
-    reset_token.delete().unwrap().execute(&mut tx).await.unwrap();
+    reset_token.delete().execute(&mut tx).await.unwrap();
     let user = User::find_by_id(reset_token.user_id).fetch_one(&mut tx).await.unwrap();
 
     tx.commit().await.unwrap();
