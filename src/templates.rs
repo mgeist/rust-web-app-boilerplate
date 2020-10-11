@@ -1,5 +1,7 @@
 use askama::Template;
 
+use crate::error::Error;
+
 #[derive(Template)]
 #[template(path = "hello.html")]
 pub struct HelloTemplate<'a> {
@@ -14,20 +16,27 @@ impl<'a> HelloTemplate<'a> {
 
 #[derive(Template)]
 #[template(path = "register.html")]
-pub struct RegisterTemplate {}
+pub struct RegisterTemplate {
+    error: Option<Error>,
+}
 impl RegisterTemplate {
     pub fn new() -> Self {
-        return Self {}
+        return Self {
+            error: None
+        }
+    }
+
+    pub fn with_error(error: Error) -> Self {
+        return Self {
+            error: Some(error)
+        }
     }
 }
 
-pub enum LoginError {
-    InvalidCredentials
-}
 #[derive(Template)]
 #[template(path = "login.html")]
 pub struct LoginTemplate {
-    error: Option<LoginError>,
+    error: Option<Error>,
 }
 
 impl LoginTemplate {
@@ -37,7 +46,7 @@ impl LoginTemplate {
         }
     }
 
-    pub fn with_error(error: LoginError) -> Self {
+    pub fn with_error(error: Error) -> Self {
         return Self {
             error: Some(error)
         }

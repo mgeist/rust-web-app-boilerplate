@@ -5,11 +5,14 @@
   <br />
   <label for="password">Enter your password:</label>
   <input type="password" name="password" id="password" required>
-  <br />
   {% match error %}
-    {% when Some with (InvalidCredentials) %}
-      <strong style="color: red;">Invalid credentials, please try again.</strong>
+    {% when Some with (err) %}
+    <div>
+      <strong style="color: red;">{{ err.message() }}</strong>
+    </div>
     {% when None %}
   {% endmatch %}
-  <input type="submit" value="Login">
+  <div>
+    <input type="submit" value="Login">
+  </div>
 </form>

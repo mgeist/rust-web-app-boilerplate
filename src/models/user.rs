@@ -3,7 +3,7 @@ use rand::prelude::*;
 use rand::thread_rng;
 use sqlx::FromRow;
 
-use crate::error::Error;
+use crate::error::{Error, ErrorKind};
 use super::{Query, QueryAs};
 
 #[derive(Debug, FromRow)]
@@ -29,11 +29,11 @@ impl User {
 
     pub fn validate_password(password: String, password_confirmation: String) -> Result<(), Error> {
         if password.len() < 8 {
-            return Err(Error::PasswordTooShort);
+            return Err(Error::new(ErrorKind::PasswordTooShort));
         } else if password.len() > 64 {
-            return Err(Error::PasswordTooLong);
+            return Err(Error::new(ErrorKind::PasswordTooLong));
         } else if !password.eq(&password_confirmation) {
-            return Err(Error::PasswordMismatch);
+            return Err(Error::new(ErrorKind::PasswordMismatch));
         } else {
             return Ok(());
         }
@@ -57,9 +57,9 @@ impl User {
         let matches;
         match verify_encoded(&self.password, password.as_bytes()) {
             Ok(m) => matches = m,
-            Err(_e) => return Err(Error::UnknownError)
+            Err(_e) => return Err(Error::new(ErrorKind::UnknownError))
         }
-        if matches { return Err(Error::PasswordMismatch) }
+        if matches { return Err(Error::new(ErrorKind::PasswordMismatch)) }
 
         let hash = generate_password(password, password_confirmation)?;
 
@@ -79,7 +79,7 @@ fn generate_password(password: String, password_confirmation: String) -> Result<
     let hash;
     match hash_encoded(password.as_bytes(), &salt, &Config::default()) {
         Ok(h) => hash = h,
-        Err(_e) => return Err(Error::UnknownError),
+        Err(_e) => return Err(Error::new(ErrorKind::UnknownError)),
     };
     Ok(hash)
 }
