@@ -8,7 +8,7 @@ use super::{Query, QueryAs};
 
 #[derive(Debug, FromRow)]
 pub struct User {
-    pub id: i64,
+    pub id: i32,
     pub email: String,
     pub password: String,
     pub created: i32,
@@ -20,7 +20,7 @@ impl User {
         let hash = generate_password(password, password_confirmation)?;
         let query = sqlx::query("
             INSERT INTO users (email, password, created, updated)
-            VALUES ($1, $2, STRFTIME('%s', 'now'), STRFTIME('%s', 'now'))
+            VALUES ($1, $2, EXTRACT(epoch FROM NOW()), EXTRACT(epoch FROM NOW()))
         ")
             .bind(email)
             .bind(hash);
@@ -43,13 +43,13 @@ impl User {
         sqlx::query_as("SELECT * FROM users")
     }
 
-    pub fn find_by_id(id: i64) -> QueryAs<Self> {
+    pub fn find_by_id(id: i32) -> QueryAs<Self> {
         sqlx::query_as("SELECT * FROM users WHERE id = $1")
             .bind(id)
     }
 
     pub fn find_by_email(email: String) -> QueryAs<Self> {
-        sqlx::query_as("SELECT * FROM users WHERE email = $2")
+        sqlx::query_as("SELECT * FROM users WHERE email = $1")
             .bind(email)
     }
 
@@ -63,7 +63,7 @@ impl User {
 
         let hash = generate_password(password, password_confirmation)?;
 
-        let query = sqlx::query("UPDATE users SET password = $1, updated = STRFTIME('%s', 'now') WHERE id = $2")
+        let query = sqlx::query("UPDATE users SET password = $1, updated = EXTRACT(epoch FROM NOW()) WHERE id = $2")
             .bind(hash)
             .bind(self.id);
         Ok(query)

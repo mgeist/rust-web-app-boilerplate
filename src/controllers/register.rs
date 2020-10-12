@@ -34,7 +34,7 @@ pub async fn post(mut request: tide::Request<AppState>) -> tide::Result {
 
     let result = query.execute(db).await;
     if result.is_err() {
-        return Ok(RegisterTemplate::with_error(Error::new(ErrorKind::UnknownError)).into());
+        return Ok(RegisterTemplate::with_error(Error::new(ErrorKind::EmailTaken)).into());
     }
 
     let user;

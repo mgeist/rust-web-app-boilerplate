@@ -1,6 +1,6 @@
-use async_sqlx_session::SqliteSessionStore;
+use async_sqlx_session::PostgresSessionStore;
 use sqlx::Error as sqlxError;
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 use tide::sessions::SessionMiddleware;
 
 mod controllers;
@@ -18,42 +18,25 @@ use controllers::{
 
 #[derive(Clone)]
 pub struct AppState {
-    pub db: SqlitePool,
+    pub db: PgPool,
 }
 
-pub async fn init_db() -> Result<SqlitePool, sqlxError> {
-    let pool = SqlitePool::new("sqlite:%3Amemory:").await?;
-
-    let schema = "
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            email TEXT NOT NULL UNIQUE,
-            password TEXT NOT NULL,
-            created INTEGER NOT NULL,
-            updated INTEGER NOT NULL
-        );
-
-        CREATE TABLE IF NOT EXISTS password_reset_tokens (
-            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
-            user_id INTEGER NOT NULL UNIQUE,
-            token TEXT NOT NULL,
-            expiration INTEGER NOT NULL,
-            FOREIGN KEY(user_id) REFERENCES users(id)
-        );
-    ";
-    sqlx::query(schema).execute(&pool).await?;
+pub async fn init_db() -> Result<PgPool, sqlxError> {
+    let db_url = std::env::var("DATABASE_URL").unwrap();
+    let pool = PgPool::new(&db_url).await?;
     
+    sqlx::query("SELECT 1").execute(&pool).await?;
     Ok(pool)
 }
 
-pub async fn init_store(pool: SqlitePool) -> Result<SqliteSessionStore, sqlxError> {
-    let store = SqliteSessionStore::from_client(pool);
+pub async fn init_store(pool: PgPool) -> Result<PostgresSessionStore, sqlxError> {
+    let store = PostgresSessionStore::from_client(pool);
     store.migrate().await?;
 
     Ok(store)
 }
 
-pub async fn init_app(pool: SqlitePool, store: SqliteSessionStore) -> tide::Server<AppState> {
+pub async fn init_app(pool: PgPool, store: PostgresSessionStore) -> tide::Server<AppState> {
     tide::log::start();
 
     let session_secret = std::env::var("SECRET_KEY").unwrap();

@@ -1,9 +1,9 @@
 use std::io::Error as stdError;
 
 use async_session::SessionStore;
-use async_sqlx_session::SqliteSessionStore;
+use async_sqlx_session::PostgresSessionStore;
 use sqlx::prelude::*;
-use sqlx::sqlite::SqlitePool;
+use sqlx::postgres::PgPool;
 
 use lib::{init_app, init_db, init_store};
 use lib::models::{PasswordResetToken, User};
@@ -32,7 +32,7 @@ async fn main() -> Result<(), stdError> {
     Ok(())
 }
 
-async fn auth(pool: &SqlitePool, store: &SqliteSessionStore, cookie_value: String) -> User {
+async fn auth(pool: &PgPool, store: &PostgresSessionStore, cookie_value: String) -> User {
     let session = (*store).load_session(cookie_value).await.unwrap().unwrap();
     let user_id = session.get("user_id").unwrap();
     let user = User::find_by_id(user_id).fetch_one(pool).await.unwrap();
@@ -40,7 +40,7 @@ async fn auth(pool: &SqlitePool, store: &SqliteSessionStore, cookie_value: Strin
     return user
 }
 
-async fn forgot_password(pool: &SqlitePool, email: String) -> String {
+async fn forgot_password(pool: &PgPool, email: String) -> String {
     let user = User::find_by_email(email).fetch_one(pool).await.unwrap();
     PasswordResetToken::new(user.id).unwrap().execute(pool).await.unwrap();
     let reset_token = PasswordResetToken::find_by_user_id(user.id).fetch_one(pool).await.unwrap();
@@ -48,7 +48,7 @@ async fn forgot_password(pool: &SqlitePool, email: String) -> String {
     return reset_token.token
 }
 
-async fn reset_password(pool: &SqlitePool, token: String, password: String, password_confirmation: String) {
+async fn reset_password(pool: &PgPool, token: String, password: String, password_confirmation: String) {
     let mut tx = pool.begin().await.unwrap();
 
     // TODO check if expired token

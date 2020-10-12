@@ -18,7 +18,7 @@ pub async fn auth_controller(_request: tide::Request<AppState>) -> tide::Result 
 
 pub async fn hello_controller(request: tide::Request<AppState>) -> tide::Result {
     let db = &request.state().db;
-    let user_id: i64 = request.session().get("user_id").unwrap_or_default();
+    let user_id: i32 = request.session().get("user_id").unwrap_or_default();
     let mut name = "guest".to_string();
     if user_id != 0 {
         name = User::find_by_id(user_id).fetch_one(db).await.unwrap().email;
